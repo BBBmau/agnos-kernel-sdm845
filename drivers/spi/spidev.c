@@ -50,7 +50,8 @@
  * nodes, since there is no fixed association of minor numbers with any
  * particular SPI bus or device.
  */
-#define SPIDEV_MAJOR			153	/* assigned */
+int SPIDEV_MAJOR = 0;
+//#define SPIDEV_MAJOR			153     /* assigned */
 #define N_SPI_MINORS			32	/* ... up to 256 */
 
 static DECLARE_BITMAP(minors, N_SPI_MINORS);
@@ -352,6 +353,9 @@ spidev_get_ioc_message(unsigned int cmd, struct spi_ioc_transfer __user *u_ioc,
 	return ioc;
 }
 
+
+#include "spi_panda.h"
+
 static long
 spidev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
@@ -410,8 +414,9 @@ spidev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 					(__u32 __user *)arg);
 		break;
 	case SPI_IOC_RD_LSB_FIRST:
-		retval = __put_user((spi->mode & SPI_LSB_FIRST) ?  1 : 0,
-					(__u8 __user *)arg);
+		retval = panda_transfer(spidev, spi, arg);
+		//retval = __put_user((spi->mode & SPI_LSB_FIRST) ?  1 : 0,
+		//			(__u8 __user *)arg);
 		break;
 	case SPI_IOC_RD_BITS_PER_WORD:
 		retval = __put_user(spi->bits_per_word, (__u8 __user *)arg);
@@ -694,8 +699,6 @@ static struct class *spidev_class;
 
 #ifdef CONFIG_OF
 static const struct of_device_id spidev_dt_ids[] = {
-	{ .compatible = "rohm,dh2228fv" },
-	{ .compatible = "lineartechnology,ltc2488" },
 	{ .compatible = "commaai,panda" },
 	{},
 };
@@ -828,7 +831,7 @@ static int spidev_remove(struct spi_device *spi)
 
 static struct spi_driver spidev_spi_driver = {
 	.driver = {
-		.name =		"spidev",
+		.name =		"spidev_panda",
 		.of_match_table = of_match_ptr(spidev_dt_ids),
 		.acpi_match_table = ACPI_PTR(spidev_acpi_ids),
 	},
@@ -853,11 +856,13 @@ static int __init spidev_init(void)
 	 * the driver which manages those device numbers.
 	 */
 	BUILD_BUG_ON(N_SPI_MINORS > 256);
-	status = register_chrdev(SPIDEV_MAJOR, "spi", &spidev_fops);
+	status = register_chrdev(0, "spi", &spidev_fops);
 	if (status < 0)
 		return status;
 
-	spidev_class = class_create(THIS_MODULE, "spidev");
+	SPIDEV_MAJOR = status;
+
+	spidev_class = class_create(THIS_MODULE, "spidev_panda");
 	if (IS_ERR(spidev_class)) {
 		unregister_chrdev(SPIDEV_MAJOR, spidev_spi_driver.driver.name);
 		return PTR_ERR(spidev_class);
